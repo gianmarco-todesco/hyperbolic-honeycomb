@@ -39,6 +39,16 @@ class PPoint:
     def length(self):
         return self.length2()**0.5
     
+    def dot(self, other):
+        assert isinstance(other, PPoint)
+        return self.x*other.x+self.y*other.y+self.z*other.z
+    
+    def cross(self, other):
+        assert isinstance(other, PPoint)
+        return PPoint(self.y*other.z - self.z*other.y,
+                      self.z*other.x - self.x*other.z,
+                      self.x*other.y - self.y*other.x)
+    
 class HPoint:
     def __init__(self, x=0, y=0, z=0, w=0):
         self.x=x
@@ -132,27 +142,44 @@ class HMatrix:
 
     def inv(self):
         return HMatrix(np.linalg.inv(self.mat))
-    
-            
-def HReflection(v:HPoint):
-    vx = v.x
-    vy = v.y
-    vz = v.z
-    vw = (v.x**2 + v.y**2 + v.z**2) / v.w
-    norm_sq = vx**2 + vy**2 + vz**2 - vw**2
-    n = math.sqrt(norm_sq)
-    vx/=n
-    vy/=n
-    vz/=n
-    vw/=n
-    
 
-    return HMatrix([
-        [1 - 2*vx*vx,    -2*vx*vy,      -2*vx*vz,       2*vx*vw],
-        [-2*vy*vx,      1 - 2*vy*vy,    -2*vy*vz,       2*vy*vw],
-        [-2*vz*vx,      -2*vz*vy,      1 - 2*vz*vz,     2*vz*vw],
-        [-2*vw*vx,      -2*vw*vy,      -2*vw*vz,       1 + 2*vw*vw]]	
-    )
+
+
+def HReflection(v:HPoint):
+    if isinstance(v, PPoint):
+        v = v.toH()
+    x, y, z, w = v.x, v.y, v.z, v.w
+    
+    vec_v = np.array([x, y, z])
+    norm_v = np.linalg.norm(vec_v)
+    
+    if norm_v < 1e-15:
+        return np.eye(4)
+    
+    # Il vettore normale n alla superficie deve essere tale che B(p, n) = 0.
+    # Per essere perpendicolare alla retta Op, n deve trovarsi nel piano p-O.
+    # Un vettore n = (w * x/norm_v, w * y/norm_v, w * z/norm_v, norm_v)
+    # soddisfa B(n, n) = 1 e B(p, n) = 0.
+    
+    n = np.array([
+        w * x / norm_v,
+        w * y / norm_v,
+        w * z / norm_v,
+        norm_v
+    ])
+    
+    # Metrica J
+    J = np.diag([1.0, 1.0, 1.0, -1.0])
+    
+    # Formula di riflessione: R = I - 2 * n * (n^T @ J)
+    I = np.eye(4)
+    # n_minkowski = n^T @ J = [n_x, n_y, n_z, -n_w]
+    n_mink = n @ J
+    
+    matrix = I - 2.0 * np.outer(n, n_mink)
+
+    return HMatrix(matrix)
+
 
 def HTranslation(p:HPoint):
     """
@@ -284,6 +311,7 @@ class DodecahedronData:
                 [6, 15, 7, 19, 17],
         ]
         self._computeFaceCenters()
+        self._link()
 
     def _computeFaceCenters(self):
         self.centers = []
@@ -293,6 +321,24 @@ class DodecahedronData:
             p.normalize()
             self.centers.append(p.toP())
 
+    def _link(self):
+        edge_tb = {}
+        for edge_i, edge in enumerate(self.edges):
+            edge_tb[(edge[0], edge[1])] = edge_i
+            edge_tb[(edge[1], edge[0])] = edge_i
+
+        self.edge2faces = {}
+        for face_i, face in enumerate(self.faces):
+            m = len(face)
+            for i in range(m):
+                v0 = face[i]
+                v1 = face[(i+1)%m]
+                edge_i = edge_tb[(v0, v1)]
+                if edge_i in self.edge2faces:
+                    assert len(self.edge2faces[edge_i]) == 1, "edge belongs to more than 2 faces"
+                    self.edge2faces[edge_i].append(face_i)
+                else:
+                    self.edge2faces[edge_i] = [face_i]
 
 dod = DodecahedronData(0.5464) # WTF??0.5257) # ) # 1.0/phi)
 
@@ -349,6 +395,87 @@ def make_line(p0, p1, m):
     hp1 = p1.toH().normalize()
     return make_line_h(hp0, hp1, m)
 
+def hslerp(p0, p1, t):
+    hp0 = p0.toH().normalize()
+    hp1 = p1.toH().normalize()
+    return hp0.slerp(hp1, t).make_w_positive().normalize().toP()
+
+def hmidpoint(p0, p1):
+    return hslerp(p0, p1, 0.5)
+
+def toface(p:PPoint, R:HMatrix):
+    return hmidpoint(p, (R*p.toH()).normalize().toP())
+
+def make_mesh_data(m=5):
+    vertices, faces = [], []
+    for (edge_i, edge) in enumerate(dod.edges):
+        
+        mrg = 0.05
+        p0 = hslerp(dod.vertices[edge[0]], PPoint(0,0,0), mrg)
+        p1 = hslerp(dod.vertices[edge[1]], PPoint(0,0,0), mrg)
+
+        face_pair = dod.edge2faces[edge_i]
+
+        c0 = dod.centers[face_pair[0]]
+        c1 = dod.centers[face_pair[1]]  
+        if (c1-c0).cross(p0-p1).dot(p0) < 0:            
+            c0, c1 = c1, c0
+            face_pair = face_pair[::-1]
+
+        refl_l = HReflection(dod.centers[face_pair[0]].toH())
+        refl_r = HReflection(dod.centers[face_pair[1]].toH())
+
+        p0_l = hmidpoint(p0, (refl_l * p0.toH()).toP())
+        p0_r = hmidpoint(p0, (refl_r * p0.toH()).toP())
+        
+        p1_l = hmidpoint(p1, (refl_l * p1.toH()).toP())
+        p1_r = hmidpoint(p1, (refl_r * p1.toH()).toP())
+
+
+        for i in range(m+1):
+            t = i/m
+            k = len(vertices)
+            if i < m:
+                faces.append((k,k+1,k+5,k+4))
+                faces.append((k+2,k+3,k+7,k+6))
+            vertices.append(hslerp(p0_l, p1_l, t))
+            p = hslerp(p0, p1, t)
+            vertices.append(p)
+            vertices.append(p)
+            vertices.append(hslerp(p0_r, p1_r, t))
+
+    for (vertex_i, vertex) in enumerate(dod.vertices):
+        vf = [i for (i,face) in enumerate(dod.faces) if vertex_i in face]
+        assert len(vf) == 3, "vertex does not belong to exactly 3 faces"
+        c0 = dod.centers[vf[0]]
+        c1 = dod.centers[vf[1]]  
+        c2 = dod.centers[vf[2]]
+        if c0.cross(c1).dot(c2) < 0:
+            c1, c2 = c2, c1
+        R0 = HReflection(c0.toH())
+        R1 = HReflection(c1.toH())
+        R2 = HReflection(c2.toH())
+        p000 = vertex
+        p111 = hslerp(vertex, PPoint(0,0,0), 0.1)
+        p011 = toface(p111, R0)
+        p101 = toface(p111, R1)
+        p110 = toface(p111, R2)
+
+        p001 = hmidpoint(toface(p011, R1), toface(p101, R0))
+        p010 = hmidpoint(toface(p011, R2), toface(p110, R0))
+        p100 = hmidpoint(toface(p101, R2), toface(p110, R1))
+
+        def add_face(p0, p1, p2, p3):
+            k = len(vertices)
+            vertices.extend([p0, p1, p2, p3])
+            faces.append((k,k+1,k+2,k+3))
+
+        add_face(p111, p110, p100, p101)
+        add_face(p111, p011, p010, p110)
+        add_face(p111, p101, p001, p011)
+
+    return vertices, faces
+
 def make_lines(matrices):
     global lines
     lines = []
@@ -368,16 +495,16 @@ def mahboh():
     make_lines(matrices)
 
 
-matrices = [HMatrix()]
-make_lines(matrices)
+#matrices = [HMatrix()]
+#make_lines(matrices)
 
-matrices = generate_matrices(10)
+
+#matrices = generate_matrices(10)
 
 # matrices = [HMatrix(), base_matrices[0], base_matrices[1]]
 
-print("ok")
 
-
+# solo per debugging
 def apply_matrix_to_point(matrix, p):
     x1,y1,z1=p.x,p.y,p.z
     r2 = (x1**2+y1**2+z1**2)
@@ -392,6 +519,7 @@ def apply_matrix_to_point(matrix, p):
     x,y,z = x3*den, y3*den, z3*den
     return PPoint(x,y,z)
 
+# solo per debugging
 def apply_matrix_to_lines(matrix, lines):
     return [[apply_matrix_to_point(matrix, p) for p in line] for line in lines]
 

@@ -1,12 +1,11 @@
 import bpy
 from mathutils import Matrix
 
-UNIT = 10.0
+UNIT = 60.0
 POINT_CLOUD_NAME = "HyperbolicPoints"
 HMATRIX_ATTR_NAME = "hmatrix"
 GN_GROUP_NAME = "HyperbolicInstances_GN"
 GN_MODIFIER_NAME = "HyperbolicInstances"
-POINCARE_INPUT_SCALE = 0.1
 
 
 def _to_float4x4_matrix(value):
@@ -142,8 +141,7 @@ def create_point_cloud_with_hmatrix(
 def create_hyperbolic_instances_gn_tree(
 	points_obj,
 	attr_name=HMATRIX_ATTR_NAME,
-	unit_scale=UNIT,
-	poincare_input_scale=POINCARE_INPUT_SCALE,
+	unit_scale=UNIT
 ):
 	node_group = bpy.data.node_groups.new(GN_GROUP_NAME, "GeometryNodeTree")
 	ensure_geometry_io(node_group)
@@ -218,7 +216,7 @@ def create_hyperbolic_instances_gn_tree(
 	position = nodes.new("GeometryNodeInputPosition")
 	position.location = (-1560, -420)
 
-	position_scale = new_vector_math("SCALE", (-1320, -420), scale=poincare_input_scale)
+	position_scale = new_vector_math("SCALE", (-1320, -420), scale=1.0/unit_scale)
 	dot_product = new_vector_math("DOT_PRODUCT", (-1080, -420))
 	one_minus_r2 = new_math("SUBTRACT", (-860, -480), 1.0)
 	two_over_denominator = new_math("DIVIDE", (-640, -480), 2.0)
@@ -366,8 +364,7 @@ def build_and_assign_hyperbolic_instances(
 	attr_name=HMATRIX_ATTR_NAME,
 	group_name=GN_GROUP_NAME,
 	modifier_name=GN_MODIFIER_NAME,
-	unit_scale=UNIT,
-	poincare_input_scale=POINCARE_INPUT_SCALE,
+	unit_scale=UNIT
 ):
 	if lines_obj is None:
 		raise ValueError("lines_obj must exist")
@@ -386,8 +383,7 @@ def build_and_assign_hyperbolic_instances(
 	node_group = create_hyperbolic_instances_gn_tree(
 		points_obj,
 		attr_name=attr_name,
-		unit_scale=unit_scale,
-		poincare_input_scale=poincare_input_scale,
+		unit_scale=unit_scale
 	)
 	modifier = assign_gn_modifier(lines_obj, node_group, modifier_name=modifier_name)
 	return modifier, node_group

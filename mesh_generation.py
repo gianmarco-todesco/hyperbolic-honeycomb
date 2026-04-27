@@ -1,6 +1,6 @@
 import bpy
 
-UNIT = 10.0
+UNIT = 60.0
 
 
 def draw_lines(lines, name="HLines", thickness=0.1, unit_scale=UNIT):

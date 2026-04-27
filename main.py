@@ -36,19 +36,19 @@ get_or_create_material = _mesh.get_or_create_material
 create_point_cloud_with_hmatrix = _pcn.create_point_cloud_with_hmatrix
 build_and_assign_hyperbolic_instances = _pcn.build_and_assign_hyperbolic_instances
 
-UNIT = _mesh.UNIT
+UNIT = 60.0
 POINT_CLOUD_NAME = _pcn.POINT_CLOUD_NAME
 HMATRIX_ATTR_NAME = _pcn.HMATRIX_ATTR_NAME
 GN_GROUP_NAME = _pcn.GN_GROUP_NAME
 GN_MODIFIER_NAME = _pcn.GN_MODIFIER_NAME
 
 
-# lines_obj = draw_lines(lines, name="dod", thickness=0.14, unit_scale=UNIT)
+# lines_obj = draw_lines(lines, UNIT, name="dod", thickness=0.14)
 
 mat = get_or_create_material()
 
 mesh_data = make_mesh_data(m=10)
-mesh_obj = make_mesh(mesh_data, name="dod_mesh", material=mat)
+mesh_obj = make_mesh(mesh_data, UNIT, name="dod_mesh", material=mat)
 
 #matrices = [matrix for matrix in base_matrices]
 # matrices = [HMatrix()]
@@ -58,5 +58,5 @@ mesh_obj = make_mesh(mesh_data, name="dod_mesh", material=mat)
 matrices = generate_matrices(n=9)
 
 points_obj = create_point_cloud_with_hmatrix(matrices)
-build_and_assign_hyperbolic_instances(mesh_obj, points_obj)
+build_and_assign_hyperbolic_instances(mesh_obj, points_obj, UNIT)
 

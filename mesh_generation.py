@@ -1,9 +1,7 @@
 import bpy
 
-UNIT = 60.0
 
-
-def draw_lines(lines, name="HLines", thickness=0.1, unit_scale=UNIT):
+def draw_lines(lines, unit_scale, name="HLines", thickness=0.1):
 	curve_data = bpy.data.curves.new(name=f"{name}_Source", type="CURVE")
 	curve_data.dimensions = "3D"
 	curve_data.resolution_u = 12
@@ -46,7 +44,7 @@ def get_or_create_material(name="HMaterial", color=(0.2, 0.6, 1.0, 1.0)):
 	return mat
 
 
-def make_mesh(mesh_data, name="HMesh", unit_scale=UNIT, material=None):
+def make_mesh(mesh_data, unit_scale, name="HMesh", material=None):
 	vertices, faces = mesh_data
 	verts = [(p.x * unit_scale, p.y * unit_scale, p.z * unit_scale) for p in vertices]
 

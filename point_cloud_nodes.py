@@ -1,7 +1,6 @@
 import bpy
 from mathutils import Matrix
 
-UNIT = 60.0
 POINT_CLOUD_NAME = "HyperbolicPoints"
 HMATRIX_ATTR_NAME = "hmatrix"
 GN_GROUP_NAME = "HyperbolicInstances_GN"
@@ -140,8 +139,8 @@ def create_point_cloud_with_hmatrix(
 
 def create_hyperbolic_instances_gn_tree(
 	points_obj,
+	unit_scale,
 	attr_name=HMATRIX_ATTR_NAME,
-	unit_scale=UNIT
 ):
 	node_group = bpy.data.node_groups.new(GN_GROUP_NAME, "GeometryNodeTree")
 	ensure_geometry_io(node_group)
@@ -361,10 +360,10 @@ def assign_gn_modifier(obj, node_group, modifier_name=GN_MODIFIER_NAME):
 def build_and_assign_hyperbolic_instances(
 	lines_obj,
 	points_obj,
+	unit_scale,
 	attr_name=HMATRIX_ATTR_NAME,
 	group_name=GN_GROUP_NAME,
 	modifier_name=GN_MODIFIER_NAME,
-	unit_scale=UNIT
 ):
 	if lines_obj is None:
 		raise ValueError("lines_obj must exist")
@@ -382,8 +381,8 @@ def build_and_assign_hyperbolic_instances(
 
 	node_group = create_hyperbolic_instances_gn_tree(
 		points_obj,
+		unit_scale,
 		attr_name=attr_name,
-		unit_scale=unit_scale
 	)
 	modifier = assign_gn_modifier(lines_obj, node_group, modifier_name=modifier_name)
 	return modifier, node_group

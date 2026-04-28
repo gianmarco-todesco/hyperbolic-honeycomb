@@ -349,7 +349,7 @@ def assign_gn_modifier(obj, node_group, modifier_name=GN_MODIFIER_NAME):
 		if modifier.type != 'NODES':
 			continue
 		group = getattr(modifier, "node_group", None)
-		if modifier.name == modifier_name or (group is not None and group.name == GN_GROUP_NAME):
+		if modifier.name == modifier_name or (group is not None and group.name == node_group.name):
 			obj.modifiers.remove(modifier)
 
 	modifier = obj.modifiers.new(name=modifier_name, type='NODES')

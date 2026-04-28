@@ -358,7 +358,7 @@ def get_sig(p:HPoint):
     return f"{quantize(p.x),quantize(p.y),quantize(p.z)}"
 
 
-def generate_matrices(n=2):
+def generate_matrices(n=2, maxDist = 0.998):
     visited = set()
     matrices = []
     visited.add(get_sig(HPoint(0,0,0,1)))
@@ -373,7 +373,7 @@ def generate_matrices(n=2):
                 sig_p = mat * HPoint(0,0,0,1)
                 if sig_p.y <= 0: continue
                 pp = sig_p.toP()
-                if pp.length() > 0.998: continue
+                if pp.length() > maxDist: continue
                 if shell >=2 and (pp.x**2+pp.z**2)**0.5/pp.y > 0.5: continue
                 sig = get_sig(sig_p)
                 if sig in visited: continue
@@ -407,10 +407,11 @@ def toface(p:PPoint, R:HMatrix):
     return hmidpoint(p, (R*p.toH()).normalize().toP())
 
 def make_mesh_data(m=5):
-    vertices, faces = [], []
+    vertices, faces, face_types = [], [], []
+    mrg = 0.08 # 0.05
+    mrg2 = mrg*3 # 0.1
     for (edge_i, edge) in enumerate(dod.edges):
         
-        mrg = 0.05
         p0 = hslerp(dod.vertices[edge[0]], PPoint(0,0,0), mrg)
         p1 = hslerp(dod.vertices[edge[1]], PPoint(0,0,0), mrg)
 
@@ -437,7 +438,9 @@ def make_mesh_data(m=5):
             k = len(vertices)
             if i < m:
                 faces.append((k,k+1,k+5,k+4))
+                face_types.append("pillar_a")
                 faces.append((k+2,k+3,k+7,k+6))
+                face_types.append("pillar_b")
             vertices.append(hslerp(p0_l, p1_l, t))
             p = hslerp(p0, p1, t)
             vertices.append(p)
@@ -456,7 +459,7 @@ def make_mesh_data(m=5):
         R1 = HReflection(c1.toH())
         R2 = HReflection(c2.toH())
         p000 = vertex
-        p111 = hslerp(vertex, PPoint(0,0,0), 0.1)
+        p111 = hslerp(vertex, PPoint(0,0,0), mrg2) # 0.1
         p011 = toface(p111, R0)
         p101 = toface(p111, R1)
         p110 = toface(p111, R2)
@@ -469,62 +472,12 @@ def make_mesh_data(m=5):
             k = len(vertices)
             vertices.extend([p0, p1, p2, p3])
             faces.append((k,k+1,k+2,k+3))
+            face_types.append("cube")
 
         add_face(p111, p110, p100, p101)
         add_face(p111, p011, p010, p110)
         add_face(p111, p101, p001, p011)
 
-    return vertices, faces
+    return vertices, faces, face_types
 
-def make_lines(matrices):
-    global lines
-    lines = []
-    for matrix in matrices:
-        for edge in dod.edges:
-            hp0 = matrix*dod.vertices[edge[0]].toH()
-            hp1 = matrix*dod.vertices[edge[1]].toH()
-            
-            lines.append(make_line_h(hp0, hp1, 3))
-
-def mahboh():
-    matrices = []
-    matrices.append(HMatrix())
-    matrices.append(base_matrices[0])
-    matrices.append(base_matrices[1])
-    matrices.append(base_matrices[1] * base_matrices[4])
-    make_lines(matrices)
-
-
-#matrices = [HMatrix()]
-#make_lines(matrices)
-
-
-#matrices = generate_matrices(10)
-
-# matrices = [HMatrix(), base_matrices[0], base_matrices[1]]
-
-
-# solo per debugging
-def apply_matrix_to_point(matrix, p):
-    x1,y1,z1=p.x,p.y,p.z
-    r2 = (x1**2+y1**2+z1**2)
-    den = 1.0/(1-r2)
-    x2,y2,z2,w2 = 2*x1*den, 2*y1*den, 2*z1*den, (1+r2)*den
-    mat = matrix.mat
-    x3 = mat[0,0]*x2+mat[0,1]*y2+mat[0,2]*z2+mat[0,3]*w2
-    y3 = mat[1,0]*x2+mat[1,1]*y2+mat[1,2]*z2+mat[1,3]*w2
-    z3 = mat[2,0]*x2+mat[2,1]*y2+mat[2,2]*z2+mat[2,3]*w2
-    w3 = mat[3,0]*x2+mat[3,1]*y2+mat[3,2]*z2+mat[3,3]*w2
-    den = 1/(1+w3)
-    x,y,z = x3*den, y3*den, z3*den
-    return PPoint(x,y,z)
-
-# solo per debugging
-def apply_matrix_to_lines(matrix, lines):
-    return [[apply_matrix_to_point(matrix, p) for p in line] for line in lines]
-
-
-# lines2 = apply_matrix_to_lines(base_matrices[0], lines)
-
-    
     

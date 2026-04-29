@@ -62,7 +62,8 @@ mesh_obj = make_mesh(mesh_data, UNIT, name="dod_mesh", material=mat)
 # matrices = [HMatrix()] + [HReflection(dod.centers[0].toH())] #  base_matrices 
 # matrices = [HMatrix()] + base_matrices 
 # matrices = generate_matrices(n=12, maxDist=0.999) 
-matrices = generate_matrices(10,0.8) # 0.9985)
+matrices = generate_matrices(700.0) # 0.9985)
+# matrices = generate_matrices(100.0) # 0.9985)
 
 #def get_dist(matrix):
 #	return (matrix*HPoint(0,0,0,1)).toP().length()

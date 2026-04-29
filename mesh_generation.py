@@ -37,8 +37,8 @@ def create_texture_atlas(
 	name="HTextureAtlas",
 	size=1024,
 	pillar_color=(0.65, 0.82, 0.78, 1.0),
-	cube_color=(0.18, 0.48, 0.90, 1.0),
-	line_color=(0.06, 0.06, 0.06, 1.0),
+	cube_color=(0.5, 0.7, 0.82, 1.0), # (0.18, 0.48, 0.90, 1.0),
+	line_color=(0.65/2, 0.82/2, 0.78/2, 1.0), # (0.06, 0.08, 0.18, 1.0)
 	line_width=0.03,
 	pillar_segments=10,
 ):
@@ -73,8 +73,8 @@ def create_texture_atlas(
 	fill_rect(0.0, 0.0, 0.5, 1.0, pillar_color)
 	fill_rect(0.5, 0.0, 1.0, 1.0, cube_color)
 
-	line_u = line_px / size
-	line_u2 = line_u * 0.25
+	line_u = line_px / size * 0.6 * 0.5
+	line_u2 = line_px / size * 0.25 * 0.5
 	
 
 	# Cube borders on all four sides.
@@ -83,7 +83,7 @@ def create_texture_atlas(
 	fill_rect(0.5, 0.0, 1.0, line_u2*2, line_color)
 	#fill_rect(0.5, 1.0 - line_u, 1.0, 1.0, (0.06, 0.06, 1.0, 1.0))
 
-	t = 0.66
+	t = 0.45 # 0.66
 	fill_rect(0.5+t*0.5, t, 1.0, 1.0, line_color)
 
 	# Pillar quads: highlight only the shared-side edge.

@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import bisect
 
 class PPoint:
     def __init__(self, x=0, y=0, z=0):
@@ -87,7 +88,10 @@ class HPoint:
 
     def norm(self):
         return self.x*self.x+self.y*self.y+self.z*self.z-self.w*self.w
-    
+
+    def euclidean_norm(self):
+        return math.sqrt(self.x*self.x+self.y*self.y+self.z*self.z+self.w*self.w)
+        
     def lerp(self, other, t):
         assert isinstance(other, HPoint)
         it = 1.0-t
@@ -232,6 +236,18 @@ def HRotation(p:HPoint, theta:float):
     ])
 
 
+
+def hslerp(p0, p1, t):
+    hp0 = p0.toH().normalize()
+    hp1 = p1.toH().normalize()
+    return hp0.slerp(hp1, t).make_w_positive().normalize().toP()
+
+def hmidpoint(p0, p1):
+    return hslerp(p0, p1, 0.5)
+
+def toface(p:PPoint, R:HMatrix):
+    return hmidpoint(p, (R*p.toH()).normalize().toP())
+
 class DodecahedronData:
     def __init__(self, radius: float = 0.9) -> None:
         phi = (1.0 + math.sqrt(5.0)) / 2.0
@@ -340,7 +356,36 @@ class DodecahedronData:
                 else:
                     self.edge2faces[edge_i] = [face_i]
 
-dod = DodecahedronData(0.5464) # WTF??0.5257) # ) # 1.0/phi)
+    def uffa(self):
+        c = self.centers[0]
+        p0 = self.vertices[self.edges[0][0]]
+        p1 = self.vertices[self.edges[0][1]]
+        edge_midpoint = hmidpoint(p0, p1)
+
+        a = c.length() # distanza centro dod - centro faccia
+        r = (1-a**2)/(2*a) # raggio sfera che contiene la faccia
+        b = edge_midpoint.length() # distanza centro dod - punto medio spigolo
+        c = r + a # distanza centro dod - centro sfera che contiene la faccia
+
+        return math.acos((b**2+r**2-c**2)/(2*b*r))
+
+
+def compute_magic_number():
+    theta = math.pi*135/180
+    def f(v): return theta - DodecahedronData(v).uffa() 
+    a = 0.5
+    b = 0.6
+    assert f(a)<0
+    assert f(b)>0
+    while b-a>1.0e-15:
+        c = (a+b)/2
+        if f(c)<0: a=c
+        else: b=c
+    return (a+b)/2
+
+
+    
+dod = DodecahedronData(0.5463956846029262) # WTF??0.5257) # ) # 1.0/phi)
 
 base_matrices = []
 for i in range(len(dod.faces)):
@@ -351,38 +396,54 @@ for i in range(len(dod.faces)):
     base_matrices.append(tr)
     
 
-def quantize(v):
-    return math.floor(v * 10**2 + 0.5)
+def quantize(v, base=10**4):
+    return math.floor(v * base + 0.5)
 
 def get_sig(p:HPoint):
     return f"{quantize(p.x),quantize(p.y),quantize(p.z)}"
+   
+def get_dist(matrix):
+    hp = matrix*HPoint(0,0,0,1)
+    hp = hp.make_w_positive().normalize()
+    x,y,z,w=hp.x,hp.y,hp.z,hp.w
+    return math.sqrt(x**2+y**2+z**2+w**2) # n.b. uso la norma euclidea!
 
 
-def generate_matrices(n=2, maxDist = 0.998):
+def generate_matrices(maxDist = 3):
+    global visited, boundaries
     visited = set()
     matrices = []
-    visited.add(get_sig(HPoint(0,0,0,1)))
-    matrices.append(HMatrix())
-    boundaries = [HMatrix()]
 
-    for shell in range(n):
-        boundaries1 = []
-        for m2 in boundaries:
-            for m1 in base_matrices:
-                mat = m2*m1
-                sig_p = mat * HPoint(0,0,0,1)
-                if sig_p.y <= 0: continue
-                pp = sig_p.toP()
-                if pp.length() > maxDist: continue
-                if shell >=2 and (pp.x**2+pp.z**2)**0.5/pp.y > 0.5: continue
-                sig = get_sig(sig_p)
-                if sig in visited: continue
-                matrices.append(mat)
-                boundaries1.append(mat)
-                visited.add(sig)
-        boundaries = boundaries1
+    def get_info(mat):
+        p = (mat * HPoint(0,0,0,1)).make_w_positive().normalize()
+        dist = math.sqrt(p.x**2+p.y**2+p.z**2+p.w**2)
+        return dist, p, get_sig(p), mat
         
-    print(len(matrices), "matrices")
+    boundaries = [get_info(HMatrix())]
+
+    def check(info):
+        dist, p, sig, mat = info
+        if dist > 6.0 and p.y>0 and (p.x**2+p.z**2)/(p.y**2) > 1.0:
+            return False
+        return p.y >= 0 and dist <= maxDist and sig not in visited
+        
+    while len(boundaries)>0:
+        info = boundaries.pop(0)
+        if not check(info): continue
+        dist,p,sig,mat = info
+        matrices.append(mat)
+        visited.add(sig)
+        if len(matrices)>100000:
+            print("uh oh")
+            return matrices
+
+        for m2 in base_matrices:
+            mat2 = mat * m2
+            child_info = get_info(mat2)
+            if check(child_info):
+                bisect.insort(boundaries, child_info, key=lambda tup:tup[0])
+        
+    # print(len(matrices), "matrices")
 
     return matrices
 
@@ -395,21 +456,11 @@ def make_line(p0, p1, m):
     hp1 = p1.toH().normalize()
     return make_line_h(hp0, hp1, m)
 
-def hslerp(p0, p1, t):
-    hp0 = p0.toH().normalize()
-    hp1 = p1.toH().normalize()
-    return hp0.slerp(hp1, t).make_w_positive().normalize().toP()
-
-def hmidpoint(p0, p1):
-    return hslerp(p0, p1, 0.5)
-
-def toface(p:PPoint, R:HMatrix):
-    return hmidpoint(p, (R*p.toH()).normalize().toP())
 
 def make_mesh_data(m=5):
     vertices, faces, face_types = [], [], []
-    mrg = 0.08 # 0.05
-    mrg2 = mrg*3 # 0.1
+    mrg = 0.10 # 0.05
+    mrg2 = 0.18 # 3  0.1
     for (edge_i, edge) in enumerate(dod.edges):
         
         p0 = hslerp(dod.vertices[edge[0]], PPoint(0,0,0), mrg)
@@ -480,4 +531,44 @@ def make_mesh_data(m=5):
 
     return vertices, faces, face_types
 
-    
+ 
+
+def foo(n):
+    global D
+    matrices = generate_matrices(n, maxDist=0.999)
+    D = sorted(set([int(get_dist(m)*10**6+0.5) for m in generate_matrices(3)]))
+    return len(matrices), len(D)
+
+def get_sig_point(mat):
+    hp = mat*HPoint(0,0,0,1)
+    assert hp.w>0
+    assert abs(hp.norm()+1)<1.0e-8
+    return hp.normalize()
+        
+def get_min_distances(matrices):
+    dmin = 1e10
+    for i,mat in enumerate(matrices):
+        hi = get_sig_point(mat)
+        for j in range(i+1,len(matrices)):
+            hj = get_sig_point(matrices[j])
+            d = (hi-hj).euclidean_norm()
+            dmin = min(dmin,d)
+    return dmin
+
+def get_next_distances(matrices, prec = 4):
+    maxd = 0.0
+    for mat in matrices:
+        d = get_sig_point(mat).euclidean_norm()
+        maxd = max(d,maxd)
+
+    D = set()
+    for mat in matrices:
+        for m in base_matrices:
+            d = get_sig_point(mat*m).euclidean_norm()
+            if d>maxd:
+                d = int(0.5 + d * 10**prec) * 10**(-prec) 
+                D.add(d)
+    return sorted(D)
+
+
+            
